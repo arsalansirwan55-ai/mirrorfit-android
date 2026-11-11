@@ -30,12 +30,17 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Restore MirrorFit source archive
+      - name: Restore and repair MirrorFit source archive
         shell: bash
         run: |
           set -euo pipefail
           cat .mirrorfit/part-*.b64 | tr -d '[:space:]' | base64 --decode > /tmp/MirrorFit-source.zip
-          unzip -t /tmp/MirrorFit-source.zip
+          if ! unzip -t /tmp/MirrorFit-source.zip; then
+            echo "Repairing ZIP central directory from local file headers..."
+            zip -FF /tmp/MirrorFit-source.zip --out /tmp/MirrorFit-source-fixed.zip
+            mv /tmp/MirrorFit-source-fixed.zip /tmp/MirrorFit-source.zip
+            unzip -t /tmp/MirrorFit-source.zip
+          fi
           mkdir -p /tmp/MirrorFit
           unzip -q /tmp/MirrorFit-source.zip -d /tmp/MirrorFit
           test -f /tmp/MirrorFit/settings.gradle.kts
