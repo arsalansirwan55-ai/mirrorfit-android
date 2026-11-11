@@ -1,0 +1,66 @@
+name: Build MirrorFit APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-apk.yml'
+      - '.mirrorfit/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirrorfit-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build installable Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Restore MirrorFit source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .mirrorfit/part-*.b64 | tr -d '[:space:]' | base64 --decode > /tmp/MirrorFit-source.zip
+          unzip -t /tmp/MirrorFit-source.zip
+          mkdir -p /tmp/MirrorFit
+          unzip -q /tmp/MirrorFit-source.zip -d /tmp/MirrorFit
+          test -f /tmp/MirrorFit/settings.gradle.kts
+          test -f /tmp/MirrorFit/app/build.gradle.kts
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform and build tools
+        run: sdkmanager --install "platforms;android-36.1" "build-tools;36.0.0" "platform-tools"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+          cache-cleanup: on-success
+
+      - name: Build debug APK
+        working-directory: /tmp/MirrorFit
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MirrorFit-APK
+          path: /tmp/MirrorFit/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
